@@ -7,10 +7,17 @@ library(sf)
 library(openxlsx)
 library(stringr)
 
+
+##RESOURCES##
 #Wikipedia resource for this program: 
 #https://en.wikipedia.org/wiki/Low-Income_Housing_Tax_Credit#:~:text=The%20LIHTC%20provides%20funding%20for%20the%20development%20costs,the%20low-income%20units%20in%20a%20rental%20housing%20project.
 #U.S. Census Bureau State Population Resource: https://www.census.gov/data/tables/time-series/demo/popest/2010s-state-total.html
+#https://dzone.com/articles/variable-importance-and-how-it-is-calculated Variable importance article 
+#https://www.cuemath.com/algebra/covariance-matrix/ Covariance matrix article 
+#https://statisticsbyjim.com/regression/identifying-important-independent-variables/ Metrics for feature importance in regression or classification 
+#https://www.learnbymarketing.com/603/variable-importance/#:~:text=A%20Decision%20Tree%20crawls%20through%20your%20data%2C%20one,to%20help%20determine%20which%20variables%20are%20most%20important.
 
+##GOAL##
 #The goal of this analysis is to determine the top five primary factors causing certain states and zip codes to receive more LIHTC funding than others. 
 #I'll try to build a machine learning model using the variables I predict to be the most critical in determining the LIHTC allocation amount of a given project. 
 #After the model's completion, I'll compare it against online sources to see how well its structure lines up with the reality of the decision-making
@@ -18,7 +25,6 @@ library(stringr)
 
 #Pull in the database table from Google BigQuery using BigQuery R API: 
 low_income_data_BQproj_id <- 'deep-span-382614'
-
 
 #Questions 1/Query 1: What is the distribution of property states?
 q1_query <- "SELECT hud_id, project, proj_add, proj_st, allocamt, FROM `low_income_housing_tax_credit_program.2017_lihtc_database_hud` 
@@ -40,22 +46,22 @@ q1_hist
 
 
 #Question/Query 2: What does the geographic distribution of low income housing tax credits look like (i.e., use the latitude/longitude data provided to make a sort of heat map for this)
-q2_query <- "SELECT hud_id, project, proj_st, latitude, longitude, FROM `low_income_housing_tax_credit_program.2017_lihtc_database_hud` 
-WHERE allocamt IS NOT NULL
-AND hud_id IS NOT NULL
-AND project IS NOT NULL
-AND proj_add IS NOT NULL
-AND proj_st IS NOT NULL 
-AND latitude IS NOT NULL 
-AND longitude IS NOT NULL"
-
-#Use the 'sf' package to plot geospatial data: 
-q2_tb <- bq_project_query(low_income_data_BQproj_id, q2_query)
-q2_dat <- bq_table_download(q2_tb)
-q2_dat <- q2_dat %>% rename(State = proj_st)
-
-q2_sf <- st_as_sf(q2_dat, coords = c('latitude', 'longitude'))
-q2_sf <- st_set_crs(q2_sf, 4326)
+# q2_query <- "SELECT hud_id, project, proj_st, latitude, longitude, FROM `low_income_housing_tax_credit_program.2017_lihtc_database_hud` 
+# WHERE allocamt IS NOT NULL
+# AND hud_id IS NOT NULL
+# AND project IS NOT NULL
+# AND proj_add IS NOT NULL
+# AND proj_st IS NOT NULL 
+# AND latitude IS NOT NULL 
+# AND longitude IS NOT NULL"
+# 
+# #Use the 'sf' package to plot geospatial data: 
+# q2_tb <- bq_project_query(low_income_data_BQproj_id, q2_query)
+# q2_dat <- bq_table_download(q2_tb)
+# q2_dat <- q2_dat %>% rename(State = proj_st)
+# 
+# q2_sf <- st_as_sf(q2_dat, coords = c('latitude', 'longitude'))
+# q2_sf <- st_set_crs(q2_sf, 4326)
 
 #Fix the axes here later: 
 #ggplot(q2_sf) + geom_sf(aes(color = State))
@@ -111,7 +117,6 @@ summary(stateincome_allocation_lm)
 #There does appear to be a significant correlation between mean state income and total LIHTC allocations. 
 q4_lr_plot <- ggplot(q3_dat, aes(x = A_MEAN, y = Allocation)) + geom_point() + geom_smooth(method = 'lm', col = 'black') + ylim(0, 2500000) + xlab('2017 Mean State Incomes ($)') + 
   ylab('2017 LIHTC Allocation ($)') + ggtitle('2017 Mean State Incomes vs. 2017 LIHTC Allocations per Housing Project')
-
 q4_lr_plot
 
 #Checking whether this relationship between mean state incomes and states' LIHTC allocations still holds when allocations are normalized to states populations
@@ -138,15 +143,56 @@ summary(stateincomepopnorm_allocation_lm)
 
 q4_lr_plot2 <- ggplot(q3_dat, aes(x = A_MEAN, y = Allocation_PopNorm)) + geom_point() + geom_smooth(method = 'lm', col = 'black') + ylim(0, 1.5) + xlab('2017 Mean State Incomes ($)') + 
   ylab('2017 LIHTC Allocations Normalized by State Population ($/resident)') + ggtitle('2017 Mean State Incomes vs. 2017 LIHTC Allocations per Housing Project, Normalized by State Populations')
-
 q4_lr_plot2
 
 #Interestingly, it looks like state population moderates the effect of mean state income on LIHTC allocations; without normalizing 
 #for mean state income, there is a significant positive correlation between mean state income of projects' states and the allocation amounts projects received. 
 #After normalizing for mean state income, there is a significant negative correlation between mean state income and allocation. 
 
-#What is the relationship between state population alone and LIHTC allocations? I would expect the correlation to be positive. 
+#What is the relationship between state population alone and LIHTC allocations?
+statepop_allocation_lm <- lm(POP.2017 ~ Allocation, data = q3_dat)
+summary(statepop_allocation_lm)
+
+q4_lr_plot3 <- ggplot(q3_dat, aes(x = POP.2017, y = Allocation)) + geom_point() + geom_smooth(method = 'lm', col = 'black') + ylim(0, 2500000)
+q4_lr_plot3
 
 
 #Question 5: What were the average allocations provided to LIHTC projects per construction type (see type column) and the distributions of those allocations? Do 
-#these allocation amounts significantly differ from one type to the next? 
+#these allocation amounts significantly differ from one type to the next? How do the other physical or housing construction variables relate to LIHTC allocation amounts, 
+#and how do these construction variables relate to one another (co-vary, etc.)? 
+q5_query <- "SELECT hud_id, project, type, allocamt FROM `low_income_housing_tax_credit_program.2017_lihtc_database_hud` 
+WHERE allocamt IS NOT NULL
+AND hud_id IS NOT NULL
+AND project IS NOT NULL
+AND type is NOT NULL" 
+
+q5_tb <- bq_project_query(low_income_data_BQproj_id, q5_query)
+q5_dat <- bq_table_download(q5_tb)
+q5_dat <- q5_dat %>% rename(Allocation = allocamt)
+q5_dat <- q5_dat %>% mutate(type2 = case_when(type == 1 ~ 'New Construction',
+                                              type == 2 ~ 'Acquisition and Rehab', 
+                                              type == 3 ~ 'Both New Construction and A/R',
+                                              type == 4 ~ 'Existing',
+                                              TRUE ~ '')) #Use key of values for the 'type' column in BigQuery to relabel each value in a new column 
+q5_dat$type2 <- factor(q5_dat$type2, levels = c('Existing', 'Acquisition and Rehab', 'Both New Construction and A/R', 'New Construction'))
+q5_dat <- q5_dat %>% arrange(type2)
+
+q5_boxplot <- ggplot(aes(x = type2), data = q5_dat) + geom_histogram(stat = 'count')
+q5_boxplot
+
+#The majority are new construction and acquisition and rehab. How do the allocation amount distributions for each type appear when plotted next to each other (try a density plot)? 
+#Do the allocation amounts vary significantly between construction types? 
+q5_density_plot <- ggplot(q5_dat, aes(x = Allocation, colour = type2)) + geom_density() + xlim(0, 1000000)
+q5_density_plot
+
+#A far greater percentage of existing housing projects received lower LIHTC allocations than the other three types of projects.
+
+#ANOVA for housing type vs. allocation: 
+
+#Examining the descriptive statistics for the other physical housing project characteristics: number of bedrooms, number of low-income units, number of total units, 
+
+
+
+#Question 6: What are the descriptive statistics regarding the geographical attributes of the housing projects (See metro, dda, and qct variables)?
+#How do these geographical variables relate to eachother in terms of covariance, etc.? I.e., how distinct are they from each other?  
+
