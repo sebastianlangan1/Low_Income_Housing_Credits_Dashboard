@@ -34,7 +34,7 @@ low_income_data_BQproj_id <- 'deep-span-382614'
 ##DESCRIPTIVE STATISTICS OF ALLOCATION AMOUNTS: Average Allocation, Std. of Allocation, etc.
 #Should create a basic table for this data. 
 #(Will not make complex plots for these basic statistics; just text or a basic table most likely in PowerBI)
-allocs_descriptive_stats_query <- "SELECT hud_id, project, proj_add, proj_st, proj_cty, proj_zip, allocamt FROM `low_income_housing_tax_credit_program.2017_lihtc_database_hud` 
+allocs_descriptive_stats_query <- "SELECT hud_id, project, proj_add, proj_st, proj_cty, proj_zip, reg, allocamt FROM `low_income_housing_tax_credit_program.2017_lihtc_database_hud` 
   WHERE CONCAT(hud_id, project, proj_add, proj_st, proj_cty, proj_zip, allocamt) IS NOT NULL"
 allocs_descriptive_stats <- bq_project_query(low_income_data_BQproj_id, allocs_descriptive_stats_query)
 allocs_descriptive_stats_dat <- bq_table_download(allocs_descriptive_stats)
@@ -59,19 +59,36 @@ allocs_box_plot <- ggplot(allocs_descriptive_stats_dat, aes(x = State, y = Alloc
 allocs_box_plot
 
 
+###DESCRIPTIVE STATISTICS OF GEOGRAPHICAL HOUSING PROJECT CHARACTERISTICS: Project counts by State, City, and Zip Code###
+#Create bar chart with distribution of LIHTC project counts per state: 
+allocs_descriptive_stats_dat <- allocs_descriptive_stats_dat %>% group_by(State) %>% mutate(PROJ_COUNT_BYSTATE = n()) %>% ungroup()
+proj_count_by_state_barchart <- ggplot(data = allocs_descriptive_stats_dat, aes(x = State)) + geom_bar(color = 'black', fill = '#BEC5FD') + ylab('Project Count') +
+  ggtitle('2017 LIHTC Allocation Counts by State')
+print(proj_count_by_state_barchart)
+#Bar chart for the top 2% of cities for LIHTC allocations, along with the bottom 2% of cities by allocation counts: 
+allocs_descriptive_stats_dat <- allocs_descriptive_stats_dat %>% group_by(proj_cty) %>% mutate(PROJ_COUNT_BYCITY = n()) %>% ungroup()
+projcounts_percentiles_bycity <- quantile(allocs_descriptive_stats_dat$PROJ_COUNT_BYCITY, c(0.10, 0.90)) #2 projects and 221 projects are the 10% quantiles 
+allocs_descriptive_stats_bycitycountoutliers <- allocs_descriptive_stats_dat %>% filter(PROJ_COUNT_BYCITY >= 221)
+proj_count_by_cityoutliers_barchart <- ggplot(data = allocs_descriptive_stats_bycitycountoutliers, aes(x = proj_cty)) + geom_bar(color = 'black', fill = '#BEC5FD') + ylab('Project Count') +
+  ggtitle('Cities in the Top 10% of 2017 LIHTC Project Counts') + xlab('Project City')
+print(proj_count_by_cityoutliers_barchart)
 
 
+###DESCRIPTIVE STATISTICS OF PHYSICAL HOUSING PROJECT CHARACTERISTICS: Project counts and allocation amounts by construction type, number of bedrooms per unit, resyndicated sites,
+#scattered site properties, etc.###
+#Histogram or other plot of housing type (New Construction, Rehabilitated Construction, etc. Recycle old code below): 
 
 
-###DESCRIPTIVE STATISTICS OF GEOGRAPHICAL HOUSING PROJECT CHARACTERISTICS###
+#Density plot relating 
 
 
-
-###DESCRIPTIVE STATISTICS OF PHYSICAL HOUSING PROJECT CHARACTERISTICS###
-
+#Average bedroom counts density plot (recycle old code below): 
 
 
-###DESCRIPTIVE STATISTICS OF HOUSING PROJECT DEMOPGRAPHIC CHARACTERISTICS###
+#
+
+
+###DESCRIPTIVE STATISTICS OF HOUSING PROJECT DEMOGRAPHIC AND SOCIOECONOMIC CHARACTERISTICS: Demographic targeting flag-type variables, ###
 
 
 
@@ -161,7 +178,7 @@ allocs_box_plot
 # q6_dat <- bq_table_download(q6_tb)
 # 
 # #Lay these side-by-side in a grid: 
-# #Create histogram of average bedroom counts: 
+# #Create density plot of average bedroom counts: 
 # q6_dat <- q6_dat %>% mutate(AVG_BR = ((0 * n_0br) + (1 * n_1br) + (2 * n_2br) + (3 * n_3br) + (4 * n_4br)) / n_units)
 # q6_bedroomcount_density <- ggplot(aes(x = AVG_BR), data = q6_dat) + geom_density(color = "darkblue", fill = "lightblue") + xlab('Average Number of Bedrooms') + ylab('Fraction of Housing Projects') + xlim(c(0, 4))
 # q6_bedroomcount_density
